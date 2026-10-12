@@ -6,6 +6,9 @@ using Dalamud.Bindings.ImGui;
 using ClumsyPeople.Core;
 using ClumsyPeople.Speech;
 using System.Collections.Concurrent;
+using Dalamud.Game.Chat;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Dalamud.Game.Text.SeStringHandling;
 
 namespace ClumsyPeople;
 
@@ -26,7 +29,19 @@ public sealed class Plugin : IDalamudPlugin
     internal string SpeechStatus = "就绪 · 按住频道按钮说话";
     internal bool Processing { get; private set; }
     internal bool Installing { get; private set; }
-    internal bool Compact;
+    internal MessageBoard Board { get; }
+    internal IReadOnlyList<MessageRecord> Messages { get; private set; } = [];
+    internal int Unread { get; private set; }
+    internal string Search = "";
+    internal int ReasonFilter;
+    internal bool OnlyUnread;
+    internal int Page;
+    internal bool LoadingBoard;
+    private int boardRequest;
+    private DateTimeOffset nextRefresh;
+    private readonly IChatGui chatGui;
+    private readonly IObjectTable objects;
+    private readonly string configDirectory;
     private readonly ConcurrentQueue<Action> completions = new();
     private readonly CancellationTokenSource lifetime = new();
     private CancellationTokenSource? recognition;
@@ -44,11 +59,14 @@ public sealed class Plugin : IDalamudPlugin
     private readonly CompactWindow compactWindow;
 
     public Plugin(IDalamudPluginInterface pluginInterface, ICommandManager commands, IFramework framework,
-        IPlayerState player, IGameGui gameGui, IPartyList party)
+        IPlayerState player, IGameGui gameGui, IPartyList party, IChatGui chatGui, IObjectTable objects)
     {
         this.pluginInterface = pluginInterface;
         this.commands = commands;
         this.framework = framework;
+        this.chatGui = chatGui; this.objects = objects;
+        configDirectory = pluginInterface.GetPluginConfigDirectory();
+        Board = new MessageBoard(configDirectory, e => completions.Enqueue(() => Error = "留言板：" + e.Message));
         Config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         if (string.IsNullOrWhiteSpace(Config.ModelDirectory)) Config.ModelDirectory = Path.Combine(pluginInterface.GetPluginConfigDirectory(), "models");
         Chat = new ChatBridge(player, gameGui, party);
@@ -62,6 +80,7 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenMainUi += Open;
         pluginInterface.UiBuilder.OpenConfigUi += Open;
         framework.Update += Update;
+        chatGui.ChatMessage += OnChat;
     }
 
     private void Open() => window.IsOpen = true;
@@ -70,12 +89,15 @@ public sealed class Plugin : IDalamudPlugin
         if (Chat.CharacterId != lastCharacter)
         {
             CancelSpeech(); Delivery.Cancel(); lastCharacter = Chat.CharacterId;
+            Messages = []; Unread = 0; Page = 0; LoadingBoard = false; boardRequest++;
+            RefreshBoard();
         }
         if (Speech.Recording || Processing) draftChanged |= Chat.Draft != recordingDraft;
         while (completions.TryDequeue(out var action))
             if (!disposed) try { action(); } catch (Exception e) { Processing = false; Error = e.Message; Delivery.Cancel(); }
         if (Speech.Recording && DateTimeOffset.UtcNow - recordingStarted >= TimeSpan.FromSeconds(60)) StopSpeech();
         Delivery.Tick(DateTimeOffset.UtcNow);
+        if (DateTimeOffset.UtcNow >= nextRefresh && !LoadingBoard) RefreshBoard();
     }
     internal void Save() => pluginInterface.SavePluginConfig(Config);
 
@@ -185,6 +207,53 @@ public sealed class Plugin : IDalamudPlugin
     internal void ShowCompact() { CancelSpeech(); compactWindow.IsOpen = true; window.IsOpen = false; }
     internal void ShowMain() { CancelSpeech(); compactWindow.IsOpen = false; window.IsOpen = true; }
 
+    private void OnChat(IHandleableChatMessage message)
+    {
+        try
+        {
+            var character = Chat.CharacterId;
+            var local = objects.LocalPlayer;
+            if (character == 0 || local == null) return;
+            var kind = (int)message.LogKind;
+            if (kind is 58 or 60 && Delivery.Running)
+            {
+                Delivery.Cancel(); Error = "游戏返回聊天错误，后续分段已取消：" + message.OriginalMessage.ExtractText();
+            }
+            var sender = SeString.Parse(message.OriginalSender.Data.Span).Payloads.OfType<PlayerPayload>().FirstOrDefault();
+            var name = sender?.PlayerName ?? message.OriginalSender.ExtractText();
+            var ownName = local.Name.TextValue;
+            var fromSelf = (int)message.SourceKind == 1 || (name == ownName && (sender == null || sender.World.RowId == local.HomeWorld.RowId));
+            var text = message.OriginalMessage.ExtractText();
+            var reason = MessageMatcher.Match(kind, fromSelf, (int)message.TargetKind == 1, text, ownName,
+                Config.Nicknames.Split([',', '，'], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries));
+            if (reason == null) return;
+            // Snapshot every field during the event; never retain Dalamud event objects.
+            Board.Enqueue(new(0, character, DateTimeOffset.FromUnixTimeSeconds(message.Timestamp), name,
+                sender?.World.Value.Name.ToString() ?? "", message.LogKind.ToString(), text, reason.Value));
+            nextRefresh = DateTimeOffset.MinValue;
+        }
+        catch (Exception e) { Error = "留言捕获失败：" + e.Message; }
+    }
+
+    internal void RefreshBoard()
+    {
+        if (LoadingBoard) return;
+        LoadingBoard = true; nextRefresh = DateTimeOffset.UtcNow.AddSeconds(5);
+        var character = Chat.CharacterId; var request = ++boardRequest;
+        Board.Read(character, Search, ReasonFilter == 0 ? null : (MessageReason)(ReasonFilter - 1), OnlyUnread, Page,
+            (messages, count) => completions.Enqueue(() =>
+            {
+                if (request != boardRequest || character != Chat.CharacterId) return;
+                Messages = messages; Unread = count; LoadingBoard = false;
+            }));
+    }
+
+    internal void ExportBoard()
+    {
+        var path = Path.Combine(configDirectory, $"messages-{Chat.CharacterId}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+        Board.Export(Chat.CharacterId, path, () => completions.Enqueue(() => Error = "已导出至 " + path));
+    }
+
     public void Dispose()
     {
         disposed = true; lifetime.Cancel(); CancelSpeech(); Speech.Dispose(); recognition?.Dispose();
@@ -193,6 +262,8 @@ public sealed class Plugin : IDalamudPlugin
         pluginInterface.UiBuilder.OpenConfigUi -= Open;
         commands.RemoveHandler("/clumsy");
         framework.Update -= Update;
+        chatGui.ChatMessage -= OnChat;
+        Board.Dispose();
         Delivery.Cancel();
         windows.RemoveAllWindows();
     }

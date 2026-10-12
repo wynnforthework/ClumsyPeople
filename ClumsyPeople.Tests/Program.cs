@@ -66,6 +66,41 @@ Test("Transport error stops without retry", () =>
     q.Tick(DateTimeOffset.UtcNow); t.Fail = false; q.Tick(DateTimeOffset.UtcNow.AddSeconds(3));
     Assert(t.Sent.Count == 0 && q.Remaining.Count == 1);
 });
+Test("Mailbox matching", () =>
+{
+    Assert(MessageMatcher.Match(13, false, false, "你好", "本人", []) == MessageReason.Tell);
+    Assert(MessageMatcher.Match(12, false, false, "本人你好", "本人", []) == null);
+    Assert(MessageMatcher.Match(14, true, false, "本人你好", "本人", []) == null);
+    Assert(MessageMatcher.Match(14, false, false, "本人你好", "本人", []) == MessageReason.Mention);
+    Assert(MessageMatcher.Match(24, false, false, "小名你好", "本人", ["小名"]) == MessageReason.Mention);
+    Assert(MessageMatcher.Match(29, false, true, "某人向你挥手", "本人", []) == MessageReason.TargetedEmote);
+    Assert(MessageMatcher.Match(29, false, false, "某人向本人挥手", "本人", []) == null);
+    Assert(MessageMatcher.Match(41, false, true, "本人受到伤害", "本人", []) == null);
+});
+Test("SQLite persistence isolation search retention and read status", () =>
+{
+    var path = Path.Combine(Path.GetTempPath(), "clumsy-test-" + Guid.NewGuid().ToString("N"), "messages.db");
+    try
+    {
+        using (var db = new MessageStore(path))
+        {
+            for (var i = 0; i < 4; i++) db.Add(new(0, 1, DateTimeOffset.UtcNow, "朋友", "红玉海", "TellIncoming", "你好" + i, MessageReason.Tell), 3);
+            db.Add(new(0, 2, DateTimeOffset.UtcNow, "其他角色", "世界", "Party", "隔离", MessageReason.Mention));
+            Assert(db.Query(1).Count == 3 && db.Query(2).Count == 1);
+            Assert(db.Query(1, "你好3").Count == 1 && db.Query(1, "' OR 1=1 --").Count == 0);
+            Assert(db.UnreadCount(1) == 3);
+            db.MarkRead(1, db.Query(1)[0].Id); Assert(db.UnreadCount(1) == 2);
+        }
+        using (var db = new MessageStore(path))
+        {
+            Assert(db.Query(1).Count == 3 && db.Query(1, unread: true).Count == 2);
+            db.Delete(2, db.Query(1)[0].Id); Assert(db.Query(1).Count == 3);
+            db.Delete(1, db.Query(1)[0].Id); Assert(db.Query(1).Count == 2);
+            db.MarkRead(1); Assert(db.UnreadCount(1) == 0);
+        }
+    }
+    finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
+});
 if (args.Length > 0)
 {
     Test("Native ASR and punctuation inference", () =>

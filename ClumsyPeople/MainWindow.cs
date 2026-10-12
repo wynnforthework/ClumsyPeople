@@ -12,6 +12,7 @@ internal sealed class MainWindow : Window
     private readonly Plugin plugin;
     private string termFrom = "";
     private string termTo = "";
+    private long deleting;
     private static readonly string[] Labels = ["小队", "团队", "喊话", "说话", "呼喊", "部队", "私聊"];
     public MainWindow(Plugin plugin) : base("手残党###ClumsyPeople")
     {
@@ -35,7 +36,7 @@ internal sealed class MainWindow : Window
         if (ImGui.BeginTabBar("pages"))
         {
             if (ImGui.BeginTabItem("语音输入")) { Voice(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("留言板")) { DrawBoard(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem($"留言板 ({plugin.Unread})###board")) { DrawBoard(); ImGui.EndTabItem(); }
             if (ImGui.BeginTabItem("设置")) { Settings(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }
@@ -65,7 +66,35 @@ internal sealed class MainWindow : Window
         foreach (var part in plugin.Delivery.Remaining) ImGui.TextWrapped($"[{Encoding.UTF8.GetByteCount(part)} 字节] {part}");
     }
 
-    private void DrawBoard() => ImGui.TextWrapped("留言板正在准备。");
+    private void DrawBoard()
+    {
+        ImGui.TextWrapped("保存插件在线期间收到的私聊、提及和定向动作。角色离线期间未收到的消息无法补取。");
+        if (ImGui.InputText("搜索正文 / 发送者", ref plugin.Search, 512)) { plugin.Page = 0; plugin.RefreshBoard(); }
+        if (ImGui.Combo("类型", ref plugin.ReasonFilter, "全部\0私聊\0提及\0定向动作\0")) { plugin.Page = 0; plugin.RefreshBoard(); }
+        if (ImGui.Checkbox("仅未读", ref plugin.OnlyUnread)) { plugin.Page = 0; plugin.RefreshBoard(); }
+        if (ImGui.Button("刷新")) plugin.RefreshBoard();
+        ImGui.SameLine(); if (ImGui.Button("全部标为已读")) { plugin.Board.MarkRead(plugin.Chat.CharacterId, null); plugin.RefreshBoard(); }
+        ImGui.SameLine(); if (ImGui.Button("导出该角色全部留言")) plugin.ExportBoard();
+        ImGui.TextDisabled($"未读 {plugin.Unread} · 第 {plugin.Page + 1} 页，每页 200 条 · 后台队列丢弃 {plugin.Board.Dropped}");
+        if (ImGui.Button("上一页") && plugin.Page > 0) { plugin.Page--; plugin.RefreshBoard(); }
+        ImGui.SameLine(); if (ImGui.Button("下一页") && plugin.Messages.Count == 200) { plugin.Page++; plugin.RefreshBoard(); }
+        using var child = ImRaii.Child("messages", new Vector2(0, -1), true);
+        foreach (var item in plugin.Messages)
+        {
+            ImGui.PushID(item.Id.ToString());
+            ImGui.TextColored(item.Read ? new Vector4(.6f,.6f,.65f,1) : new Vector4(.78f,.6f,1,1),
+                $"{item.Time.LocalDateTime:MM-dd HH:mm:ss} · {item.Sender}@{item.World} · {item.Channel} · {item.Reason}");
+            ImGui.TextWrapped(item.Text);
+            if (ImGui.SmallButton("已读")) { plugin.Board.MarkRead(item.CharacterId, item.Id); plugin.RefreshBoard(); }
+            ImGui.SameLine(); if (ImGui.SmallButton("复制")) ImGui.SetClipboardText(item.Text);
+            ImGui.SameLine(); if (ImGui.SmallButton(deleting == item.Id ? "确认删除" : "删除"))
+            {
+                if (deleting == item.Id) { plugin.Board.Delete(item.CharacterId, item.Id); plugin.RefreshBoard(); deleting = 0; }
+                else deleting = item.Id;
+            }
+            ImGui.Separator(); ImGui.PopID();
+        }
+    }
     internal static void ChannelButtons(Plugin plugin)
     {
         ImGui.TextWrapped(plugin.SpeechStatus);

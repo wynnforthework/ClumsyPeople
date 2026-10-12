@@ -3,6 +3,7 @@ using ClumsyPeople.Core;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Client.Game.Group;
 
 namespace ClumsyPeople;
 
@@ -18,6 +19,7 @@ internal sealed unsafe class ChatBridge(IPlayerState player, IGameGui gui, IPart
         if (CharacterId == 0) error = "请先登录角色";
         else if (Chat == null || Chat->TextInput == null) error = "游戏聊天框不可用";
         else if (channel is ChatChannel.Party or ChatChannel.Alliance && party.Length == 0) error = "当前不在小队中";
+        else if (channel == ChatChannel.Alliance && (GroupManager.Instance() == null || !GroupManager.Instance()->MainGroup.IsAlliance)) error = "当前不在跨小队团队中";
         return error.Length == 0;
     }
 
