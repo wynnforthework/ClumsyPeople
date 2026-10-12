@@ -1,0 +1,11 @@
+{
+  "Author": "wynnforthework",
+  "Name": "手残党",
+  "InternalName": "ClumsyPeople",
+  "Punchline": "按住说话，轻松聊天；重要留言不再错过。",
+  "Description": "本地离线中文语音输入，支持常用聊天频道、超长分段及私聊、提及、定向动作留言板。首次使用需安装语音模型。",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 15,
+  "RepoUrl": "https://github.com/wynnforthework/ClumsyPeople",
+  "Tags": ["语音", "聊天", "留言", "中文"]
+}

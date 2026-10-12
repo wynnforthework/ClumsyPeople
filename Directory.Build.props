@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <Version>0.1.0.0</Version>
+    <Authors>wynnforthework</Authors>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RepositoryUrl>https://github.com/wynnforthework/ClumsyPeople</RepositoryUrl>
+  </PropertyGroup>
+</Project>
