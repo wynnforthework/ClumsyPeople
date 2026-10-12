@@ -46,6 +46,8 @@ internal sealed unsafe class ChatBridge(IPlayerState player, IGameGui gui, IPart
         Validate(command);
         Chat->TextInput->SetText(command);
         if (Draft != command) throw new InvalidOperationException("聊天框未完整接收文本，结果仍保留在插件内");
+        Chat->Focus();
+        Chat->SetComponentFocusNode((FFXIVClientStructs.FFXIV.Component.GUI.AtkComponentBase*)Chat->TextInput);
     }
 
     public void Send(string command)

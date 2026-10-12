@@ -14,7 +14,7 @@ public sealed class Configuration : IPluginConfiguration
     public string Nicknames { get; set; } = "";
     public Dictionary<string, string> Replacements { get; set; } = new()
     {
-        ["艾欧泽亚"] = "艾欧泽亚", ["爱欧泽亚"] = "艾欧泽亚",
-        ["利姆萨罗敏萨"] = "利姆萨·罗敏萨", ["以太之光"] = "以太之光",
+        ["爱欧泽亚"] = "艾欧泽亚",
+        ["利姆萨罗敏萨"] = "利姆萨·罗敏萨",
     };
 }

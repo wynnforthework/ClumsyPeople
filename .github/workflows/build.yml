@@ -1,0 +1,31 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.100'
+      - name: Download pinned Chinese Dalamud API 15
+        shell: pwsh
+        run: |
+          $commit = 'd69915770a9e4fd75beb5f75723fa4433bbb7ca2'
+          Invoke-WebRequest "https://raw.githubusercontent.com/ottercorp/dalamud-distrib/$commit/latest.7z" -OutFile dalamud.7z
+          & 7z x dalamud.7z -odalamud -y
+          if ($LASTEXITCODE) { throw 'Dalamud extraction failed' }
+      - name: Build, test and package
+        shell: pwsh
+        run: ./scripts/build.ps1 -DalamudPath "$PWD/dalamud"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClumsyPeople-0.1.0.0
+          path: .artifacts/ClumsyPeople-0.1.0.0.zip
+          if-no-files-found: error

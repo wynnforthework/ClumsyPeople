@@ -66,7 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         this.framework = framework;
         this.chatGui = chatGui; this.objects = objects;
         configDirectory = pluginInterface.GetPluginConfigDirectory();
-        Board = new MessageBoard(configDirectory, e => completions.Enqueue(() => Error = "留言板：" + e.Message));
+        Board = new MessageBoard(configDirectory, e => completions.Enqueue(() => { LoadingBoard = false; Error = "留言板：" + e.Message; }));
         Config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         if (string.IsNullOrWhiteSpace(Config.ModelDirectory)) Config.ModelDirectory = Path.Combine(pluginInterface.GetPluginConfigDirectory(), "models");
         Chat = new ChatBridge(player, gameGui, party);
@@ -83,7 +83,7 @@ public sealed class Plugin : IDalamudPlugin
         chatGui.ChatMessage += OnChat;
     }
 
-    private void Open() => window.IsOpen = true;
+    private void Open() => ShowMain();
     private void Update(IFramework _)
     {
         if (Chat.CharacterId != lastCharacter)
@@ -134,6 +134,7 @@ public sealed class Plugin : IDalamudPlugin
             recognition?.Dispose(); recognition = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
             generation++;
             Speech.Start(Config.Microphone);
+            recognition.CancelAfter(TimeSpan.FromSeconds(150));
             SpeechStatus = "正在录音 · 松开结束"; Error = "";
         }
         catch (Exception e) { Error = e.Message; }
@@ -172,7 +173,10 @@ public sealed class Plugin : IDalamudPlugin
                     else if (!auto) Delivery.FillNext();
                 });
             }
-            catch (OperationCanceledException) { }
+            catch (OperationCanceledException)
+            {
+                completions.Enqueue(() => { if (ticket == generation) { Processing = false; SpeechStatus = "识别超时或已取消，请重试"; } });
+            }
             catch (Exception e)
             {
                 completions.Enqueue(() => { if (ticket == generation) { Processing = false; SpeechStatus = "识别失败"; Error = e.Message; } });
@@ -237,7 +241,6 @@ public sealed class Plugin : IDalamudPlugin
 
     internal void RefreshBoard()
     {
-        if (LoadingBoard) return;
         LoadingBoard = true; nextRefresh = DateTimeOffset.UtcNow.AddSeconds(5);
         var character = Chat.CharacterId; var request = ++boardRequest;
         Board.Read(character, Search, ReasonFilter == 0 ? null : (MessageReason)(ReasonFilter - 1), OnlyUnread, Page,
