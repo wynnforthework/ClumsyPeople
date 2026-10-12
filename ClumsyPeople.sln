@@ -9,6 +9,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClumsyPeople.Core", "Clumsy
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClumsyPeople.Tests", "ClumsyPeople.Tests\ClumsyPeople.Tests.csproj", "{761B7802-D2B6-4183-B4DF-4DFA5D2B6FED}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClumsyPeople.Speech", "ClumsyPeople.Speech\ClumsyPeople.Speech.csproj", "{BAB71BE2-274B-4547-B761-55CA92014917}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -55,6 +57,18 @@ Global
 		{761B7802-D2B6-4183-B4DF-4DFA5D2B6FED}.Release|x64.Build.0 = Release|Any CPU
 		{761B7802-D2B6-4183-B4DF-4DFA5D2B6FED}.Release|x86.ActiveCfg = Release|Any CPU
 		{761B7802-D2B6-4183-B4DF-4DFA5D2B6FED}.Release|x86.Build.0 = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|x64.Build.0 = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Debug|x86.Build.0 = Debug|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|x64.ActiveCfg = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|x64.Build.0 = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|x86.ActiveCfg = Release|Any CPU
+		{BAB71BE2-274B-4547-B761-55CA92014917}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

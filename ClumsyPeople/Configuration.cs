@@ -9,6 +9,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool AutoSend { get; set; }
     public int Microphone { get; set; } = -1;
     public string ModelDirectory { get; set; } = "";
+    public string DownloadProxy { get; set; } = "";
     public string Recipient { get; set; } = "";
     public string Nicknames { get; set; } = "";
     public Dictionary<string, string> Replacements { get; set; } = new()

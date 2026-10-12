@@ -1,9 +1,34 @@
 {
   "version": 1,
   "dependencies": {
-    "net10.0": {
+    "net10.0-windows7.0": {
+      "NAudio.Core": {
+        "type": "Transitive",
+        "resolved": "2.2.1",
+        "contentHash": "GgkdP6K/7FqXFo7uHvoqGZTJvW4z8g2IffhOO4JHaLzKCdDOUEzVKtveoZkCuUX8eV2HAINqi7VFqlFndrnz/g=="
+      },
+      "NAudio.WinMM": {
+        "type": "Transitive",
+        "resolved": "2.2.1",
+        "contentHash": "xFHRFwH4x6aq3IxRbewvO33ugJRvZFEOfO62i7uQJRUNW2cnu6BeBTHUS0JD5KBucZbHZaYqxQG8dwZ47ezQuQ==",
+        "dependencies": {
+          "NAudio.Core": "2.2.1"
+        }
+      },
+      "org.k2fsa.sherpa.onnx.runtime.win-x64": {
+        "type": "Transitive",
+        "resolved": "1.12.14",
+        "contentHash": "y+4fmT6ZpBdOtHfY1mHMnS6h7awNdlOHA0UXfcvYzzlpIEZWI3xfwKKZAgjR1MFK1FE8/4Lk3DGJXEntd4XLfQ=="
+      },
       "clumsypeople.core": {
         "type": "Project"
+      },
+      "clumsypeople.speech": {
+        "type": "Project",
+        "dependencies": {
+          "NAudio.WinMM": "[2.2.1, )",
+          "org.k2fsa.sherpa.onnx.runtime.win-x64": "[1.12.14, )"
+        }
       }
     }
   }

@@ -10,6 +10,8 @@ namespace ClumsyPeople;
 internal sealed class MainWindow : Window
 {
     private readonly Plugin plugin;
+    private string termFrom = "";
+    private string termTo = "";
     private static readonly string[] Labels = ["小队", "团队", "喊话", "说话", "呼喊", "部队", "私聊"];
     public MainWindow(Plugin plugin) : base("手残党###ClumsyPeople")
     {
@@ -28,6 +30,7 @@ internal sealed class MainWindow : Window
         using var rounding = ImRaii.PushStyle(ImGuiStyleVar.FrameRounding, 7f).Push(ImGuiStyleVar.ChildRounding, 10f);
         ImGui.TextColored(new Vector4(.78f,.60f,1,1), "手残党");
         ImGui.SameLine(); ImGui.TextDisabled("离线语音 · 重要留言");
+        ImGui.SameLine(); if (ImGui.SmallButton("紧凑模式")) plugin.ShowCompact();
         ImGui.Separator();
         if (ImGui.BeginTabBar("pages"))
         {
@@ -41,12 +44,7 @@ internal sealed class MainWindow : Window
 
     private void Voice()
     {
-        ImGui.TextWrapped("选择频道。识别结果也可以在下方手动编辑。");
-        for (var i = 0; i < Labels.Length; i++)
-        {
-            if (i > 0 && i % 4 != 0) ImGui.SameLine();
-            if (ImGui.Button(Labels[i], new Vector2(110, 44))) plugin.SelectedChannel = (ChatChannel)i;
-        }
+        ChannelButtons(plugin);
         ImGui.TextUnformatted($"当前频道：{Labels[(int)plugin.SelectedChannel]}");
         if (plugin.SelectedChannel == ChatChannel.Tell)
         {
@@ -68,5 +66,73 @@ internal sealed class MainWindow : Window
     }
 
     private void DrawBoard() => ImGui.TextWrapped("留言板正在准备。");
-    private void Settings() => ImGui.TextWrapped("手残党 · 国服 7.56 / Dalamud API 15。自动发送默认关闭。");
+    internal static void ChannelButtons(Plugin plugin)
+    {
+        ImGui.TextWrapped(plugin.SpeechStatus);
+        ImGui.ProgressBar(plugin.Speech.Level, new Vector2(-1, 8), "");
+        for (var i = 0; i < Labels.Length; i++)
+        {
+            if (i > 0 && i % 4 != 0) ImGui.SameLine();
+            ImGui.Button(Labels[i], new Vector2(100, 36));
+            if (ImGui.IsItemActivated()) plugin.BeginSpeech((ChatChannel)i);
+        }
+        if (plugin.Speech.Recording && !ImGui.IsMouseDown(ImGuiMouseButton.Left)) plugin.StopSpeech();
+        if (plugin.Speech.Recording && !ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)) plugin.CancelSpeech();
+        if (ImGui.Button("取消录音 / 识别")) plugin.CancelSpeech();
+    }
+
+    public override void OnClose() => plugin.CancelSpeech();
+
+    private void Settings()
+    {
+        ImGui.TextWrapped("国服 7.56 / Dalamud API 15 · 中文离线识别 · 首次安装约 133 MiB");
+        var devices = Speech.SpeechEngine.Devices;
+        var mic = plugin.Config.Microphone;
+        if (ImGui.BeginCombo("麦克风", mic < 0 || mic >= devices.Count ? "系统默认" : devices[mic]))
+        {
+            if (ImGui.Selectable("系统默认", mic == -1)) { plugin.Config.Microphone = -1; plugin.Save(); }
+            for (var i = 0; i < devices.Count; i++)
+                if (ImGui.Selectable(devices[i] + "##" + i, mic == i)) { plugin.Config.Microphone = i; plugin.Save(); }
+            ImGui.EndCombo();
+        }
+        var path = plugin.Config.ModelDirectory;
+        if (ImGui.InputText("模型根目录", ref path, 1024)) { plugin.Config.ModelDirectory = path; plugin.Save(); }
+        ImGui.TextWrapped("导入：将两个官方模型目录放在同一根目录，再设置上方路径。");
+        var proxy = plugin.Config.DownloadProxy;
+        if (ImGui.InputText("下载代理（可留空）", ref proxy, 256)) { plugin.Config.DownloadProxy = proxy; plugin.Save(); }
+        using (ImRaii.Disabled(plugin.Installing || plugin.Processing || plugin.Speech.Recording))
+            if (ImGui.Button("下载并校验模型")) plugin.InstallModels();
+        if (ImGui.Button("检查本地模型"))
+        {
+            try { _ = Speech.ModelFiles.Find(path); plugin.Error = "模型文件齐全"; }
+            catch (Exception e) { plugin.Error = e.Message; }
+        }
+        ImGui.Separator();
+        var recipient = plugin.Config.Recipient;
+        if (ImGui.InputText("私聊收件人（角色名@服务器）", ref recipient, 128)) { plugin.Config.Recipient = recipient; plugin.Save(); }
+        var nicknames = plugin.Config.Nicknames;
+        if (ImGui.InputText("留言昵称（逗号分隔）", ref nicknames, 1024)) { plugin.Config.Nicknames = nicknames; plugin.Save(); }
+        ImGui.Separator();
+        ImGui.TextUnformatted("识别词汇纠正");
+        ImGui.InputText("原词", ref termFrom, 128); ImGui.InputText("替换为", ref termTo, 128);
+        if (ImGui.Button("添加 / 更新") && !string.IsNullOrWhiteSpace(termFrom)) { plugin.Config.Replacements[termFrom] = termTo; plugin.Save(); }
+        foreach (var pair in plugin.Config.Replacements.ToArray())
+        {
+            ImGui.TextUnformatted($"{pair.Key} → {pair.Value}"); ImGui.SameLine();
+            if (ImGui.SmallButton("删除##" + pair.Key)) { plugin.Config.Replacements.Remove(pair.Key); plugin.Save(); }
+        }
+    }
+}
+
+internal sealed class CompactWindow(Plugin plugin) : Window("手残党 · 按住说话###ClumsyPeopleCompact")
+{
+    public override void Draw()
+    {
+        MainWindow.ChannelButtons(plugin);
+        ImGui.TextWrapped(plugin.Delivery.Status);
+        if (ImGui.Button("打开主窗口")) plugin.ShowMain();
+        ImGui.SameLine(); if (ImGui.Button("停止发送")) plugin.Delivery.Cancel();
+        if (plugin.Error.Length > 0) ImGui.TextWrapped(plugin.Error);
+    }
+    public override void OnClose() => plugin.CancelSpeech();
 }

@@ -4,5 +4,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ClumsyPeople.Core/ClumsyPeople.Core.csproj" />
+    <ProjectReference Include="../ClumsyPeople.Speech/ClumsyPeople.Speech.csproj" />
   </ItemGroup>
 </Project>

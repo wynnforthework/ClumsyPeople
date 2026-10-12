@@ -66,6 +66,25 @@ Test("Transport error stops without retry", () =>
     q.Tick(DateTimeOffset.UtcNow); t.Fail = false; q.Tick(DateTimeOffset.UtcNow.AddSeconds(3));
     Assert(t.Sent.Count == 0 && q.Remaining.Count == 1);
 });
+if (args.Length > 0)
+{
+    Test("Native ASR and punctuation inference", () =>
+    {
+        using var engine = new ClumsyPeople.Speech.SpeechEngine();
+        var root = Path.GetFullPath(args[0]);
+        var files = ClumsyPeople.Speech.ModelFiles.Find(root);
+        Assert(File.Exists(files.Punctuation));
+        var wav = Directory.EnumerateFiles(root, "0.wav", SearchOption.AllDirectories).First();
+        using var reader = new NAudio.Wave.WaveFileReader(wav);
+        var bytes = new byte[reader.Length]; reader.ReadExactly(bytes);
+        var samples = Enumerable.Range(0, bytes.Length / 2).Select(i => BitConverter.ToInt16(bytes, i * 2) / 32768f).ToArray();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var text = engine.Recognize(samples, root, CancellationToken.None);
+        Console.WriteLine($"ASR: {text} ({clock.ElapsedMilliseconds} ms, sample rate {reader.WaveFormat.SampleRate})");
+        Assert(text.Length > 0);
+        Assert(engine.Recognize(new float[16000], root, CancellationToken.None) == "");
+    });
+}
 Console.WriteLine($"{passed} tests passed");
 
 sealed class FakeTransport : IChatTransport
