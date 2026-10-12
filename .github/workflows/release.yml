@@ -1,0 +1,29 @@
+name: Manual release
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.100'
+      - name: Download pinned Chinese Dalamud
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://raw.githubusercontent.com/ottercorp/dalamud-distrib/d69915770a9e4fd75beb5f75723fa4433bbb7ca2/latest.7z' -OutFile dalamud.7z
+          & 7z x dalamud.7z -odalamud -y
+          if ($LASTEXITCODE) { throw 'Dalamud extraction failed' }
+      - name: Validate and package
+        shell: pwsh
+        run: ./scripts/build.ps1 -DalamudPath "$PWD/dalamud"
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.0.0
+          name: 手残党 0.1.0.0
+          draft: true
+          files: .artifacts/ClumsyPeople-0.1.0.0.zip
+          fail_on_unmatched_files: true

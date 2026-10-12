@@ -1,5 +1,6 @@
 using NAudio.Wave;
 using SherpaOnnx;
+using System.Runtime.InteropServices;
 
 namespace ClumsyPeople.Speech;
 
@@ -13,14 +14,16 @@ public sealed class SpeechEngine : IDisposable
     private List<float> audio = [];
     private TaskCompletionSource<float[]>? stopped;
     private bool cancelled;
+    private static readonly object nativeGate = new();
+    private static bool nativeLoaded;
     public float Level { get; private set; }
     public bool Recording => microphone != null;
     public static IReadOnlyList<string> Devices => Enumerable.Range(0, WaveInEvent.DeviceCount).Select(i => WaveInEvent.GetCapabilities(i).ProductName).ToArray();
 
     public void Start(int device)
     {
-        if (microphone != null) throw new InvalidOperationException("Already recording");
-        if (WaveInEvent.DeviceCount == 0) throw new InvalidOperationException("No microphone available. Check Windows permissions.");
+        if (microphone != null) throw new InvalidOperationException("已经在录音");
+        if (WaveInEvent.DeviceCount == 0) throw new InvalidOperationException("未找到麦克风，请检查 Windows 麦克风权限");
         audio = []; cancelled = false; Level = 0;
         stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessionAudio = audio;
@@ -83,6 +86,7 @@ public sealed class SpeechEngine : IDisposable
         {
             cancellation.ThrowIfCancellationRequested();
             if (samples.Length < 1600 || samples.All(s => Math.Abs(s) < .002f)) return "";
+            EnsureNativeLibraries();
             if (recognizer == null || loadedDirectory != directory)
             {
                 recognizer?.Dispose(); punctuation?.Dispose(); recognizer = null; punctuation = null;
@@ -120,15 +124,30 @@ public sealed class SpeechEngine : IDisposable
         Cancel();
         lock (gate) { recognizer?.Dispose(); punctuation?.Dispose(); recognizer = null; punctuation = null; }
     }
+
+    private static void EnsureNativeLibraries()
+    {
+        lock (nativeGate)
+        {
+            if (nativeLoaded) return;
+            var root = Path.GetDirectoryName(typeof(SpeechEngine).Assembly.Location)!;
+            var directory = File.Exists(Path.Combine(root, "onnxruntime.dll")) ? root : Path.Combine(root, "runtimes", "win-x64", "native");
+            // Load the pinned dependency from the plugin package before loading its C API.
+            _ = NativeLibrary.Load(Path.Combine(directory, "onnxruntime.dll"));
+            var handle = NativeLibrary.Load(Path.Combine(directory, "sherpa-onnx-c-api.dll"));
+            NativeLibrary.SetDllImportResolver(typeof(OnlineRecognizer).Assembly, (name, _, _) => name.Contains("sherpa-onnx-c-api", StringComparison.Ordinal) ? handle : IntPtr.Zero);
+            nativeLoaded = true;
+        }
+    }
 }
 
 public sealed record ModelFiles(string Encoder, string Decoder, string Joiner, string Tokens, string Punctuation)
 {
     public static ModelFiles Find(string directory)
     {
-        if (!Directory.Exists(directory)) throw new FileNotFoundException("Install or import speech models in Settings first.");
+        if (!Directory.Exists(directory)) throw new FileNotFoundException("请先在设置中安装或导入语音模型");
         string FindFile(string pattern) => Directory.EnumerateFiles(directory, pattern, SearchOption.AllDirectories)
-            .OrderBy(p => p.Length).FirstOrDefault() ?? throw new FileNotFoundException($"Missing model {pattern}");
+            .OrderBy(p => p.Length).FirstOrDefault() ?? throw new FileNotFoundException($"模型缺少 {pattern}");
         return new(FindFile("encoder*.int8.onnx"), FindFile("decoder*.int8.onnx"), FindFile("joiner*.int8.onnx"), FindFile("tokens.txt"), FindFile("model.int8.onnx"));
     }
 }

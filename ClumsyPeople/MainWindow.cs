@@ -36,8 +36,8 @@ internal sealed class MainWindow : Window
         if (ImGui.BeginTabBar("pages"))
         {
             if (ImGui.BeginTabItem("语音输入")) { Voice(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem($"留言板 ({plugin.Unread})###board")) { DrawBoard(); ImGui.EndTabItem(); }
-            if (ImGui.BeginTabItem("设置")) { Settings(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem($"留言板 ({plugin.Unread})###board")) { if (plugin.Speech.Recording) plugin.CancelSpeech(); DrawBoard(); ImGui.EndTabItem(); }
+            if (ImGui.BeginTabItem("设置")) { if (plugin.Speech.Recording) plugin.CancelSpeech(); Settings(); ImGui.EndTabItem(); }
             ImGui.EndTabBar();
         }
         if (plugin.Error.Length > 0) ImGui.TextWrapped(plugin.Error);
