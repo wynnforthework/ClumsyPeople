@@ -7,6 +7,13 @@ namespace ClumsyPeople.Speech;
 public sealed class SpeechEngine : IDisposable
 {
     private readonly object gate = new();
+    private readonly string pluginDirectory;
+
+    public SpeechEngine(string pluginDirectory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(pluginDirectory);
+        this.pluginDirectory = Path.GetFullPath(pluginDirectory);
+    }
     private OnlineRecognizer? recognizer;
     private OfflinePunctuation? punctuation;
     private string loadedDirectory = "";
@@ -125,12 +132,12 @@ public sealed class SpeechEngine : IDisposable
         lock (gate) { recognizer?.Dispose(); punctuation?.Dispose(); recognizer = null; punctuation = null; }
     }
 
-    private static void EnsureNativeLibraries()
+    private void EnsureNativeLibraries()
     {
         lock (nativeGate)
         {
             if (nativeLoaded) return;
-            var root = Path.GetDirectoryName(typeof(SpeechEngine).Assembly.Location)!;
+            var root = pluginDirectory;
             var directory = File.Exists(Path.Combine(root, "onnxruntime.dll")) ? root : Path.Combine(root, "runtimes", "win-x64", "native");
             // Load the pinned dependency from the plugin package before loading its C API.
             _ = NativeLibrary.Load(Path.Combine(directory, "onnxruntime.dll"));
@@ -143,9 +150,20 @@ public sealed class SpeechEngine : IDisposable
 
 public sealed record ModelFiles(string Encoder, string Decoder, string Joiner, string Tokens, string Punctuation)
 {
+    public static string BundledDirectory(string pluginDirectory) => Path.Combine(pluginDirectory, "models");
+
+    public static string ResolveDirectory(string configured, string legacyDefault, string pluginDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(configured) ||
+            Path.GetFullPath(configured).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                .Equals(Path.GetFullPath(legacyDefault).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase))
+            return BundledDirectory(pluginDirectory);
+        return configured;
+    }
+
     public static ModelFiles Find(string directory)
     {
-        if (!Directory.Exists(directory)) throw new FileNotFoundException("请先在设置中安装或导入语音模型");
+        if (!Directory.Exists(directory)) throw new FileNotFoundException("模型目录不存在，请完整解压插件安装包，或在设置中选择随附模型");
         string FindFile(string pattern) => Directory.EnumerateFiles(directory, pattern, SearchOption.AllDirectories)
             .OrderBy(p => p.Length).FirstOrDefault() ?? throw new FileNotFoundException($"模型缺少 {pattern}");
         return new(FindFile("encoder*.int8.onnx"), FindFile("decoder*.int8.onnx"), FindFile("joiner*.int8.onnx"), FindFile("tokens.txt"), FindFile("model.int8.onnx"));

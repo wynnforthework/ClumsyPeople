@@ -25,10 +25,10 @@ public sealed class Plugin : IDalamudPlugin
     internal string Result = "";
     internal string Error = "";
     internal ChatChannel SelectedChannel;
-    internal SpeechEngine Speech { get; } = new();
+    internal SpeechEngine Speech { get; }
+    internal string BundledModelDirectory { get; }
     internal string SpeechStatus = "就绪 · 按住频道按钮说话";
     internal bool Processing { get; private set; }
-    internal bool Installing { get; private set; }
     internal MessageBoard Board { get; }
     internal IReadOnlyList<MessageRecord> Messages { get; private set; } = [];
     internal int Unread { get; private set; }
@@ -65,10 +65,14 @@ public sealed class Plugin : IDalamudPlugin
         this.commands = commands;
         this.framework = framework;
         this.chatGui = chatGui; this.objects = objects;
+        var pluginDirectory = pluginInterface.AssemblyLocation.DirectoryName
+            ?? throw new InvalidOperationException("Dalamud ?????????");
+        Speech = new SpeechEngine(pluginDirectory);
+        BundledModelDirectory = ModelFiles.BundledDirectory(pluginDirectory);
         configDirectory = pluginInterface.GetPluginConfigDirectory();
         Board = new MessageBoard(configDirectory, e => completions.Enqueue(() => { LoadingBoard = false; Error = "留言板：" + e.Message; }));
         Config = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        if (string.IsNullOrWhiteSpace(Config.ModelDirectory)) Config.ModelDirectory = Path.Combine(pluginInterface.GetPluginConfigDirectory(), "models");
+        Config.ModelDirectory = ModelFiles.ResolveDirectory(Config.ModelDirectory, Path.Combine(configDirectory, "models"), pluginDirectory);
         Chat = new ChatBridge(player, gameGui, party);
         Delivery = new DeliveryQueue(Chat);
         window = new MainWindow(this);
@@ -116,7 +120,7 @@ public sealed class Plugin : IDalamudPlugin
 
     internal void BeginSpeech(ChatChannel channel)
     {
-        if (Processing || Installing || Speech.Recording) return;
+        if (Processing || Speech.Recording) return;
         try
         {
             if (!Chat.CanUse(channel, out var error)) throw new InvalidOperationException(error);
@@ -188,24 +192,6 @@ public sealed class Plugin : IDalamudPlugin
     {
         generation++; recognition?.Cancel(); Speech.Cancel(); Processing = false;
         SpeechStatus = "已取消 · 按住频道按钮重新录音";
-    }
-
-    internal void InstallModels()
-    {
-        if (Installing || Processing || Speech.Recording) return;
-        Installing = true;
-        var root = Config.ModelDirectory; var proxy = Config.DownloadProxy;
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                var progress = new Progress<string>(s => completions.Enqueue(() => SpeechStatus = s));
-                await ModelInstaller.InstallAsync(root, proxy, progress, lifetime.Token);
-            }
-            catch (OperationCanceledException) { }
-            catch (Exception e) { completions.Enqueue(() => Error = "模型安装失败：" + e.Message); }
-            finally { completions.Enqueue(() => Installing = false); }
-        });
     }
 
     internal void ShowCompact() { CancelSpeech(); compactWindow.IsOpen = true; window.IsOpen = false; }

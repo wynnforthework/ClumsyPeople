@@ -13,10 +13,10 @@
 | SQLitePCLRaw | 2.1.11 | Apache-2.0; https://github.com/ericsink/SQLitePCL.raw |
 | SQLite | SQLitePCLRaw native bundle | Public domain; https://sqlite.org/copyright.html |
 
-Models are downloaded separately, never included in the plugin ZIP. Sources and model documentation:
+The plugin ZIP includes the extracted Chinese ASR and INT8 punctuation model directories under `models/`, including upstream README files. Archives are downloaded and SHA256-verified during the build; the plugin does not download or extract models. Sources and model documentation:
 
 - Chinese Zipformer 14M INT8: https://github.com/k2-fsa/sherpa-onnx/releases/tag/asr-models
 - CT-Transformer Chinese/English INT8 punctuation: https://github.com/k2-fsa/sherpa-onnx/releases/tag/punctuation-models
 - Model usage/licensing information: https://k2-fsa.github.io/sherpa/onnx/pretrained_models/index.html
 
-The sherpa-onnx repository's Apache license does not imply a blanket license for every third-party model or training corpus. Refer to the specific model's upstream documentation before redistribution. This project downloads the pinned upstream archives for local use.
+The ASR model's upstream README declares Apache-2.0. The punctuation model's upstream README identifies its ModelScope source and conversion steps. Model documentation is preserved in the corresponding directories; the sherpa-onnx code license does not replace the upstream model documentation.

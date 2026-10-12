@@ -101,12 +101,38 @@ Test("SQLite persistence isolation search retention and read status", () =>
     }
     finally { Directory.Delete(Path.GetDirectoryName(path)!, true); }
 });
+Test("Bundled model path and legacy configuration migration", () =>
+{
+    var legacy = Path.Combine(Path.GetTempPath(), "old-clumsy-models");
+    var custom = Path.Combine(Path.GetTempPath(), "custom-clumsy-models");
+    var pluginDirectory = Path.Combine(Path.GetTempPath(), "plugin-install");
+    var bundled = ClumsyPeople.Speech.ModelFiles.BundledDirectory(pluginDirectory);
+    Assert(ClumsyPeople.Speech.ModelFiles.ResolveDirectory("", legacy, pluginDirectory) == bundled);
+    Assert(ClumsyPeople.Speech.ModelFiles.ResolveDirectory(legacy, legacy, pluginDirectory) == bundled);
+    Assert(ClumsyPeople.Speech.ModelFiles.ResolveDirectory(custom, legacy, pluginDirectory) == custom);
+    Assert(bundled == Path.Combine(pluginDirectory, "models"));
+});
+Test("Model paths work when speech assembly is loaded from memory", () =>
+{
+    var context = new System.Runtime.Loader.AssemblyLoadContext("clumsy-memory-test", isCollectible: true);
+    try
+    {
+        using var stream = File.OpenRead(typeof(ClumsyPeople.Speech.ModelFiles).Assembly.Location);
+        var assembly = context.LoadFromStream(stream);
+        Assert(assembly.Location == "");
+        var directory = Path.Combine(Path.GetTempPath(), "dalamud-plugin-install");
+        var type = assembly.GetType("ClumsyPeople.Speech.ModelFiles")!;
+        var result = type.GetMethod("ResolveDirectory")!.Invoke(null, ["", "unused-legacy", directory]);
+        Assert((string)result! == Path.Combine(directory, "models"));
+    }
+    finally { context.Unload(); }
+});
 if (args.Length > 0)
 {
     Test("Native ASR and punctuation inference", () =>
     {
-        using var engine = new ClumsyPeople.Speech.SpeechEngine();
-        var root = Path.GetFullPath(args[0]);
+        using var engine = new ClumsyPeople.Speech.SpeechEngine(AppContext.BaseDirectory);
+        var root = args[0] == "--bundled" ? ClumsyPeople.Speech.ModelFiles.ResolveDirectory("", "unused-legacy", AppContext.BaseDirectory) : Path.GetFullPath(args[0]);
         var files = ClumsyPeople.Speech.ModelFiles.Find(root);
         Assert(File.Exists(files.Punctuation));
         var wav = Directory.EnumerateFiles(root, "0.wav", SearchOption.AllDirectories).First();

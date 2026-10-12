@@ -114,7 +114,7 @@ internal sealed class MainWindow : Window
 
     private void Settings()
     {
-        ImGui.TextWrapped("国服 7.56 / Dalamud API 15 · 中文离线识别 · 首次安装约 133 MiB");
+        ImGui.TextWrapped("国服 7.56 / Dalamud API 15 · 中文离线识别 · 模型已随插件附带");
         var devices = Speech.SpeechEngine.Devices;
         var mic = plugin.Config.Microphone;
         if (ImGui.BeginCombo("麦克风", mic < 0 || mic >= devices.Count ? "系统默认" : devices[mic]))
@@ -126,11 +126,14 @@ internal sealed class MainWindow : Window
         }
         var path = plugin.Config.ModelDirectory;
         if (ImGui.InputText("模型根目录", ref path, 1024)) { plugin.Config.ModelDirectory = path; plugin.Save(); }
-        ImGui.TextWrapped("导入：将两个官方模型目录放在同一根目录，再设置上方路径。");
-        var proxy = plugin.Config.DownloadProxy;
-        if (ImGui.InputText("下载代理（可留空）", ref proxy, 256)) { plugin.Config.DownloadProxy = proxy; plugin.Save(); }
-        using (ImRaii.Disabled(plugin.Installing || plugin.Processing || plugin.Speech.Recording))
-            if (ImGui.Button("下载并校验模型")) plugin.InstallModels();
+        ImGui.TextWrapped("默认使用插件目录内的 models，无需下载或单独解压。也可指定自备模型目录。");
+        if (ImGui.Button("使用随附模型"))
+        {
+            plugin.Config.ModelDirectory = plugin.BundledModelDirectory;
+            plugin.Save();
+            path = plugin.Config.ModelDirectory;
+        }
+        ImGui.SameLine();
         if (ImGui.Button("检查本地模型"))
         {
             try { _ = Speech.ModelFiles.Find(path); plugin.Error = "模型文件齐全"; }
